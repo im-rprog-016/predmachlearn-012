@@ -1,0 +1,157 @@
+Predicting activity type from accelerometer data
+========================================================
+
+# Synopsis
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+The purpose of this experiment is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+We will try to build up a machine learning algorithm predicting the exercise type based on these measurements.
+
+# Data Exploration
+
+First we will load the training dataset, randomize it and split it in 2 parts, a train dataset (70% of the data), which we will split during learning into train and validation, and a test dataset (30% of the data).
+We will train our algorithms on the train set with cross validation and use the test dataset only in the final step, to evaluate our out-of-sample error.
+We will not use the actual pml-testing.csv dataset provided for anything else than submitting the prediction.
+
+
+```{r,echo=TRUE,warning=FALSE,message=FALSE,cache=TRUE}
+library(dplyr)
+set.seed(123)
+dataset <- read.csv("pml-training.csv")
+dataset <- cbind(dataset, sample(c(1,2), nrow(dataset), prob=c(0.7, 0.3), replace=T))
+colnames(dataset)[161] <- "set_id"
+train <- dataset %>% filter(set_id==1)
+test <- dataset %>% filter(set_id==2)
+test_final <- read.csv("pml-testing.csv")
+```
+
+We check that the distribution is correct
+```{r,echo=TRUE,warning=FALSE,message=FALSE,cache=TRUE}
+nrow(train)
+unique(train[,160])
+nrow(test)
+unique(test[,160])
+```
+
+We check then the available factors which we can use for prediction
+```{r,echo=TRUE,warning=FALSE,message=FALSE,cache=TRUE}
+str(train)
+```
+
+We observe that from the variables available we have some describing the distribution of measurements during the activity (min, max, avg, stdev, kurtosis, skewness, variance) and other indicators, like the amplitude, gyroscopic measurements, acceleration.
+We will include all these factors 
+
+We see that we have timestamps which we can exclude from the prediciton algos and also a user label attached to the data. We can assume that each person has a "style" when performing the exercises, and although it is tempting to include the user as a factor, we are interesting in detecting the activity quality, and including the user could only lead us to bias. So it is reasonable to assume that when classifying an activity we will make it based on the measurements only, discrading the timestamps and the user information.
+
+Thus, we build a dataset containing only measurements information
+
+```{r,echo=TRUE,warning=FALSE,message=FALSE,cache=TRUE}
+removedCol <- c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "new_window", "num_window", "set_id")
+train <- train[,!(names(train) %in% removedCol)]
+test <- test[,!(names(test) %in% removedCol)]
+test_final <- test_final[,!(names(test_final) %in% removedCol)]
+```
+
+# Building a learning algorithm
+
+In order to prepare applying a machine learning algorithm on the data, we will normalize the datasets (by centering to the mean and scaling with the standard deviation).
+We specify training params so that we perform the learning using 10-fold resampling and repeat the cross validation 5 times.
+
+Since, after trying a first fit of the model, we find that the processing time needed is huge, we will first preprocess the data with PCA, in order to reduce the dimensionality.
+The number of components should be chosen such that the variance captured is significant (>95%)
+
+```{r,echo=TRUE,warning=FALSE,message=FALSE,cache=TRUE}
+library(caret)
+
+#we have few columns with NAs, we could simply remove them, or replace their values with zeros
+oldCols <- colnames(train)
+pred <- train[,ncol(train)]
+train = cbind(train[,sapply(train, is.numeric)], pred)
+newCols <- colnames(train)
+removedCols <- setdiff(oldCols, newCols)
+removedCols <- removedCols[removedCols != "classe"]
+
+test <- test[,!(names(test) %in% removedCols)]
+test_final <- test_final[,!(names(test_final) %in% removedCols)]
+
+train[is.na(train)] <- 0
+test[is.na(test)] <- 0
+test_final[is.na(test_final)] <- 0
+
+pca = preProcess(train[,1:(ncol(train)-1)], method='pca', pcaComp=7)
+```
+
+We build new datasets with reduced dimensionality
+
+```{r,echo=TRUE,warning=FALSE,message=FALSE,cache=TRUE}
+train2 = cbind(predict(pca, train[,1:(ncol(train)-1)]), train[,ncol(train)])
+colnames(train2)[ncol(train2)] <- "classe"
+
+test2 = cbind(predict(pca, test[,1:(ncol(test)-1)]), test[,ncol(test)])
+colnames(test2)[ncol(test2)] <- "classe"
+
+test_final2 = cbind(predict(pca, test_final[,1:(ncol(test_final)-1)]), test_final[,ncol(test_final)])
+colnames(test_final2)[ncol(test_final2)] <- "classe"
+```
+
+```{r,echo=TRUE,warning=FALSE,message=FALSE,cache=TRUE}
+library(caret)
+
+mod <- train(classe ~ ., data=train2, method="rpart", trControl=trainControl(method="repeatedcv", number=10, repeats=5));
+```
+
+We plot the resulted prediction tree
+
+```{r,echo=TRUE,warning=FALSE,message=FALSE,cache=TRUE}
+library(rattle)
+fancyRpartPlot(mod$finalModel)
+```
+
+
+## Cross-validation
+
+We build the predicted values from the test data set, using the same features, extracted with the PCA tuned for the training set.
+This gives us an estimate of the out of sampel error
+
+```{r,echo=TRUE,warning=FALSE,message=FALSE,cache=TRUE}
+pred = predict(mod$finalModel, newdata=test2, type="class")
+```
+
+We check the cross-validation error:
+
+```{r,echo=TRUE,warning=FALSE,message=FALSE,cache=TRUE}
+confusionMatrix(test2$classe, pred)
+```
+
+
+We find that we have quite a low accuracy, of only ~40%.
+A more advanced prediction algo could be a SVM classifier using RBF kernels.
+
+```{r,echo=TRUE,warning=FALSE,message=FALSE,cache=TRUE}
+library(caret)
+library(kernlab)
+
+d <- sigest(classe ~ ., data=train2, frac=1)
+tuneGrid <- data.frame(.sigma = d[1], .C = 2^(-2:3))
+mod2 <- train(classe ~ ., data=train2, method="svmRadial", preProc=c("center", "scale"), tuneGrid=tuneGrid, trControl=trainControl(method="repeatedcv", number=10, repeats=5))
+```
+
+Checking the results of this model, we have:
+
+```{r,echo=TRUE,warning=FALSE,message=FALSE,cache=TRUE}
+#predsvm = predict(mod2$finalModel, newdata=test2, type="class")
+#confusionMatrix(test2$classe, predsvm)
+```
+
+Finally, we produce the results for the test sample
+
+```{r,echo=TRUE,warning=FALSE,message=FALSE,cache=TRUE}
+pred2 = predict(mod$finalModel, newdata=test_final2, type="class")
+pred2
+```
+
+# Results
+
+We built a machine learning algorithm to predict the activity type based on accelerometer data. Due to computational demands, we performed a dimensionality reduction and applied a prediction tree algorithm and a support vector machines algorithm. We were able to successfuly build two algos for predicting the class, with different accuracy levels, however the results are still unsatisfactory and more research is needed to build the proper classification algorithm.
+
