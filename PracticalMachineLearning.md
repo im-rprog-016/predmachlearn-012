@@ -302,7 +302,7 @@ confusionMatrix(test2$classe, pred)
 ```
 
 
-We find that we have quite a low accuracy, of only ~40%.
+We find that we have quite a low accuracy, of only ~40% (the expected out-of-sample error is 0.5858)
 A more advanced prediction algo could be a SVM classifier using RBF kernels.
 
 
@@ -407,6 +407,21 @@ confusionMatrix(test2$classe, prednb$class)
 ```
 
 This performs even worse, an option would be to combine the classifiers, but work still needs to be done to clean up variables, so that the prediction rates can be brought >80% before doing it.
+We could try gradient boosting as a fourth model, but running it takes too much time to include it in this analysis:
+
+
+```r
+library(caret)
+#mod4 <- train(classe ~ ., data=train2, method="gbm", trControl=trainControl(method="repeatedcv", number=10, repeats=5))
+```
+
+
+```r
+#predgbm = predict(mod4$finalModel, newdata=test2[-ncol(test2)], type="class")
+#confusionMatrix(test2$classe, predgbm$class)
+```
+
+
 
 Finally, we produce the results for the test sample
 
@@ -415,6 +430,7 @@ Finally, we produce the results for the test sample
 pred1 = predict(mod$finalModel, newdata=test_final2, type="class")
 pred2 = predict(mod2$finalModel, newdata=test_final2[-ncol(test_final2)], type="response")
 pred3 = predict(mod3$finalModel, newdata=test_final2[-ncol(test_final2)], type="class")
+#pred4 = predict(mod4$finalModel, newdata=test_final2[-ncol(test_final2)], type="class")
 pred1
 ```
 
@@ -440,6 +456,10 @@ pred3$class
 ```
 ##  [1] C E B E C D B B B B B E B B E E B E B D
 ## Levels: A B C D E
+```
+
+```r
+#pred4$class
 ```
 
 # Results

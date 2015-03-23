@@ -453,7 +453,7 @@ This gives us an estimate of the out of sampel error</p>
 ## Balanced Accuracy      0.6750  0.59575   0.5894   0.6496   0.6037
 </code></pre>
 
-<p>We find that we have quite a low accuracy, of only ~40%.
+<p>We find that we have quite a low accuracy, of only ~40% (the expected out-of-sample error is 0.5858)
 A more advanced prediction algo could be a SVM classifier using RBF kernels.</p>
 
 <pre><code class="r">library(caret)
@@ -547,13 +547,23 @@ confusionMatrix(test2$classe, prednb$class)
 ## Balanced Accuracy    0.490077   0.5307  0.52100  0.56147  0.55538
 </code></pre>
 
-<p>This performs even worse, an option would be to combine the classifiers, but work still needs to be done to clean up variables, so that the prediction rates can be brought &gt;80% before doing it.</p>
+<p>This performs even worse, an option would be to combine the classifiers, but work still needs to be done to clean up variables, so that the prediction rates can be brought &gt;80% before doing it.
+We could try gradient boosting as a fourth model, but running it takes too much time to include it in this analysis:</p>
+
+<pre><code class="r">library(caret)
+#mod4 &lt;- train(classe ~ ., data=train2, method=&quot;gbm&quot;, trControl=trainControl(method=&quot;repeatedcv&quot;, number=10, repeats=5))
+</code></pre>
+
+<pre><code class="r">#predgbm = predict(mod4$finalModel, newdata=test2[-ncol(test2)], type=&quot;class&quot;)
+#confusionMatrix(test2$classe, predgbm$class)
+</code></pre>
 
 <p>Finally, we produce the results for the test sample</p>
 
 <pre><code class="r">pred1 = predict(mod$finalModel, newdata=test_final2, type=&quot;class&quot;)
 pred2 = predict(mod2$finalModel, newdata=test_final2[-ncol(test_final2)], type=&quot;response&quot;)
 pred3 = predict(mod3$finalModel, newdata=test_final2[-ncol(test_final2)], type=&quot;class&quot;)
+#pred4 = predict(mod4$finalModel, newdata=test_final2[-ncol(test_final2)], type=&quot;class&quot;)
 pred1
 </code></pre>
 
@@ -574,6 +584,9 @@ pred1
 
 <pre><code>##  [1] C E B E C D B B B B B E B B E E B E B D
 ## Levels: A B C D E
+</code></pre>
+
+<pre><code class="r">#pred4$class
 </code></pre>
 
 <h1>Results</h1>
