@@ -379,7 +379,7 @@ train[is.na(train)] &lt;- 0
 test[is.na(test)] &lt;- 0
 test_final[is.na(test_final)] &lt;- 0
 
-pca = preProcess(train[,1:(ncol(train)-1)], method=&#39;pca&#39;, pcaComp=5)
+pca = preProcess(train[,1:(ncol(train)-1)], method=&#39;pca&#39;, pcaComp=7)
 </code></pre>
 
 <p>We build new datasets with reduced dimensionality</p>
@@ -460,20 +460,101 @@ A more advanced prediction algo could be a SVM classifier using RBF kernels.</p>
 library(kernlab)
 
 d &lt;- sigest(classe ~ ., data=train2, frac=1)
-tuneGrid &lt;- data.frame(.sigma = d[1], .C = 2^(-2:6))
-#mod2 &lt;- train(classe ~ ., data=train2, method=&quot;svmRadial&quot;, preProc=c(&quot;center&quot;, &quot;scale&quot;), tuneGrid=tuneGrid, trControl=trainControl(method=&quot;repeatedcv&quot;, number=10, repeats=5))
+tuneGrid &lt;- data.frame(.sigma = d[1], .C = 2^(-2:5))
+mod2 &lt;- train(classe ~ ., data=train2, method=&quot;svmRadial&quot;, preProc=c(&quot;center&quot;, &quot;scale&quot;), tuneGrid=tuneGrid, trControl=trainControl(method=&quot;repeatedcv&quot;, number=10, repeats=5))
 </code></pre>
 
 <p>Checking the results of this model, we have:</p>
 
-<pre><code class="r">#predsvm = predict(mod2$finalModel, newdata=test2, type=&quot;class&quot;)
-#confusionMatrix(test2$classe, predsvm)
+<pre><code class="r">predsvm = predict(mod2$finalModel, newdata=test2[-ncol(test2)], type=&quot;response&quot;)
+confusionMatrix(test2$classe, predsvm)
 </code></pre>
+
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 1077  134    3   14  436
+##          B   72  688    0   12  328
+##          C  319  285  115   19  305
+##          D  287   76    8  364  202
+##          E  105  180   13   28  744
+## 
+## Overall Statistics
+##                                          
+##                Accuracy : 0.5139         
+##                  95% CI : (0.501, 0.5269)
+##     No Information Rate : 0.3466         
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16      
+##                                          
+##                   Kappa : 0.3799         
+##  Mcnemar&#39;s Test P-Value : &lt; 2.2e-16      
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            0.5790   0.5048  0.82734  0.83295   0.3692
+## Specificity            0.8515   0.9074  0.83648  0.89344   0.9142
+## Pos Pred Value         0.6472   0.6255  0.11026  0.38847   0.6953
+## Neg Pred Value         0.8113   0.8568  0.99497  0.98503   0.7321
+## Prevalence             0.3199   0.2344  0.02391  0.07516   0.3466
+## Detection Rate         0.1852   0.1183  0.01978  0.06261   0.1280
+## Detection Prevalence   0.2862   0.1892  0.17939  0.16116   0.1840
+## Balanced Accuracy      0.7153   0.7061  0.83191  0.86319   0.6417
+</code></pre>
+
+<p>Performance is still not too good, so we try also a naive bayes classifier</p>
+
+<pre><code class="r">library(caret)
+library(klaR)
+mod3 &lt;- train(classe ~ ., data=train2, method=&quot;nb&quot;, preProc=c(&quot;center&quot;, &quot;scale&quot;), trControl=trainControl(method=&quot;repeatedcv&quot;, number=10, repeats=5))
+</code></pre>
+
+<pre><code class="r">prednb = predict(mod3$finalModel, newdata=test2[-ncol(test2)], type=&quot;class&quot;)
+confusionMatrix(test2$classe, prednb$class)
+</code></pre>
+
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction   A   B   C   D   E
+##          A  24 863 110 227 440
+##          B  18 606  87 102 287
+##          C  18 446  93 151 335
+##          D   9 426  53 217 232
+##          E  21 392  83 116 458
+## 
+## Overall Statistics
+##                                           
+##                Accuracy : 0.2405          
+##                  95% CI : (0.2295, 0.2517)
+##     No Information Rate : 0.4701          
+##     P-Value [Acc &gt; NIR] : 1               
+##                                           
+##                   Kappa : 0.0686          
+##  Mcnemar&#39;s Test P-Value : &lt;2e-16          
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity          0.266667   0.2217  0.21831  0.26691  0.26142
+## Specificity          0.713487   0.8397  0.82368  0.85603  0.84934
+## Pos Pred Value       0.014423   0.5509  0.08917  0.23159  0.42804
+## Neg Pred Value       0.984096   0.5488  0.93020  0.87779  0.72723
+## Prevalence           0.015480   0.4701  0.07327  0.13983  0.30134
+## Detection Rate       0.004128   0.1042  0.01600  0.03732  0.07878
+## Detection Prevalence 0.286206   0.1892  0.17939  0.16116  0.18404
+## Balanced Accuracy    0.490077   0.5307  0.52100  0.56147  0.55538
+</code></pre>
+
+<p>This performs even worse, an option would be to combine the classifiers, but work still needs to be done to clean up variables, so that the prediction rates can be brought &gt;80% before doing it.</p>
 
 <p>Finally, we produce the results for the test sample</p>
 
-<pre><code class="r">pred2 = predict(mod$finalModel, newdata=test_final2, type=&quot;class&quot;)
-pred2
+<pre><code class="r">pred1 = predict(mod$finalModel, newdata=test_final2, type=&quot;class&quot;)
+pred2 = predict(mod2$finalModel, newdata=test_final2[-ncol(test_final2)], type=&quot;response&quot;)
+pred3 = predict(mod3$finalModel, newdata=test_final2[-ncol(test_final2)], type=&quot;class&quot;)
+pred1
 </code></pre>
 
 <pre><code>##  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 
@@ -481,9 +562,23 @@ pred2
 ## Levels: A B C D E
 </code></pre>
 
+<pre><code class="r">pred2
+</code></pre>
+
+<pre><code>##  [1] A E E A A E D B A A E E B E E A A E A B
+## Levels: A B C D E
+</code></pre>
+
+<pre><code class="r">pred3$class
+</code></pre>
+
+<pre><code>##  [1] C E B E C D B B B B B E B B E E B E B D
+## Levels: A B C D E
+</code></pre>
+
 <h1>Results</h1>
 
-<p>We built a machine learning algorithm to predict the activity type based on accelerometer data. Due to computational demands, we performed a dimensionality reduction and applied a prediction tree algorithm and a support vector machines algorithm. We were able to successfuly build two algos for predicting the class, with different accuracy levels, however the results are still unsatisfactory and more research is needed to build the proper classification algorithm.</p>
+<p>We built a machine learning algorithm to predict the activity type based on accelerometer data. Due to computational demands, we performed a dimensionality reduction and applied a prediction tree algorithm and a support vector machines algorithm. We were able to successfuly build multiple algos for predicting the class, with different accuracy levels, however the results are still unsatisfactory and more research is needed to build the proper classification algorithm.</p>
 
 </body>
 
